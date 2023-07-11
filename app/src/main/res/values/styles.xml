@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+
+
+    <style name="tab_text" parent="@android:style/TextAppearance.Widget.TabWidget">
+
+        <item name="textAllCaps">false</item>
+        <item name="android:textColor">@color/black</item>
+    </style>
+</resources>

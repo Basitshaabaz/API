@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">AssessmentProject</string>
+    <string name="app_title">Nasa Rover Vehicles</string>
+    <string name="curiosity">Curiosity</string>
+    <string name="opportunity">Opportunity</string>
+    <string name="spirit">Spirit</string>
+</resources>
