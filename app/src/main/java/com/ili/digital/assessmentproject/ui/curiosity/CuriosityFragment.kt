@@ -2,44 +2,42 @@ package com.ili.digital.assessmentproject.ui.curiosity
 
 import android.os.Bundle
 import android.view.LayoutInflater
-import android.view.Menu
-import android.view.MenuInflater
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
-import androidx.core.view.MenuProvider
+import android.view.WindowManager
+import android.widget.PopupWindow
+import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.ili.digital.assessmentproject.R
 import com.ili.digital.assessmentproject.adapters.GridAdapter
 import com.ili.digital.assessmentproject.databinding.FragmentCuriosityBinding
-import com.ili.digital.assessmentproject.data.model.MarsPhoto
+import com.ili.digital.assessmentproject.data.model.RoverType
 import com.ili.digital.assessmentproject.ui.PhotoInfoDialogFragment
 import com.ili.digital.assessmentproject.util.Constants.CLEAR_FILTER
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
-class CuriosityFragment : Fragment(), MenuProvider {
+class CuriosityFragment : Fragment() {
 
-    private var endOfPage = false
-    private var isLoading = false
-    private var searchMode = false
 
+    private lateinit var roverType: RoverType
     private val binding get() = _binding!!
     private var _binding: FragmentCuriosityBinding? = null
-    private var cameraList: HashSet<String>? = null
-    private var photoList: MutableList<MarsPhoto> = mutableListOf()
-    private val viewModel: CuriosityFragmentViewModel by viewModels()
-    private val adapter = GridAdapter(GridAdapter.OnClickListener {
-        /* Handle item click */
-        PhotoInfoDialogFragment(it).show(childFragmentManager, PhotoInfoDialogFragment.TAG)
-    })
+
+
+    // Lazily initializing the adapter.
+    private val adapter by lazy {
+        GridAdapter(GridAdapter.OnClickListener {
+            /* Handle item click */
+            PhotoInfoDialogFragment(it).show(childFragmentManager, PhotoInfoDialogFragment.TAG)
+        })
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -48,13 +46,35 @@ class CuriosityFragment : Fragment(), MenuProvider {
     ): View {
         _binding = FragmentCuriosityBinding.inflate(inflater, container, false)
         initRecyclerView()
-        observers()
+        roverType = arguments?.getSerializable(ARG_ROVER_TYPE) as? RoverType
+            ?: throw IllegalArgumentException("RoverType must be provided.")
+
         return binding.root
     }
 
+
+    /**
+     * responsible for any view click listener
+     */
+    private fun listeners(viewModel: CuriosityFragmentViewModel) {
+        binding.filter.setOnClickListener {
+            showPopupWindow(binding.filter,viewModel)
+        }
+    }
+
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        requireActivity().addMenuProvider(this, viewLifecycleOwner, Lifecycle.State.RESUMED)
+        val viewModel: CuriosityFragmentViewModel by viewModels()
+        viewModel.updateRoverType(getRoverType())
+        observers(viewModel)
+        listeners(viewModel)
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+
     }
 
     private fun initRecyclerView() {
@@ -65,64 +85,114 @@ class CuriosityFragment : Fragment(), MenuProvider {
      * Observes the changes in the response of live state.
      * Updates the UI based on the screen state.
      */
-    private fun observers() {
+    private fun observers(viewModel: CuriosityFragmentViewModel) {
+
+
         viewLifecycleOwner.lifecycleScope.launch {
-            getCuriosity()
-            viewModel.opportunityState.collect { screenState ->
-                if (screenState.isLoading) {
-                    binding.progress.visibility = View.VISIBLE
-                    binding.rvPhotos.visibility = View.GONE
-                } else if (screenState.photoList?.isNotEmpty() == true) {
-                    binding.progress.visibility = View.GONE
-                    binding.rvPhotos.visibility = View.VISIBLE
-
-                    updateRecyclerView(screenState.photoList)
-                    cameraList = screenState.cameraList!!
-                    addNewMarsPhotos(photoList, screenState.photoList.toMutableList())
-                } else {
-                    endOfPage = true
-                    binding.progress.visibility = View.GONE
-                    binding.rvPhotos.visibility = View.VISIBLE
-                    Toast.makeText(context, "No Data Found", Toast.LENGTH_SHORT).show()
-                }
+            viewModel.marsPhotoFlow.collect { pagingData ->
+                adapter.submitData(pagingData)
             }
+
         }
-        setupPager()
+
+
     }
 
-    private fun getCuriosity() {
-        searchMode = false
-        viewLifecycleOwner.lifecycleScope.launch { viewModel.getCuriosity() }
-    }
-
-    private fun setupPager() {
-        binding.rvPhotos.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                super.onScrolled(recyclerView, dx, dy)
-                val layoutManager = recyclerView.layoutManager as GridLayoutManager
-                val visibleItemCount = layoutManager.childCount
-                val totalItemCount = layoutManager.itemCount
-                val firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition()
-                val isLastItemVisible =
-                    (visibleItemCount + firstVisibleItemPosition) >= totalItemCount
-
-                if (isLastItemVisible && !isLoading && !endOfPage && !searchMode) {
-                    isLoading = true
-                    viewLifecycleOwner.lifecycleScope.launch {
-                        viewModel.loadMoreCuriosity()
-                        isLoading = false
-                    }
-                }
-            }
-        })
-    }
 
     /**
-     * Updates the RecyclerView with the given photoList.
+     * Retrieves the RoverType from the fragment's arguments.
      */
-    private fun updateRecyclerView(photoList: List<MarsPhoto>) {
-        adapter.updateData(photoList)
+    private fun getRoverType(): RoverType {
+        return arguments?.getSerializable(ARG_ROVER_TYPE) as? RoverType
+            ?: throw IllegalArgumentException("RoverType must be provided.")
     }
+
+    private fun showPopupWindow(anchorView: View, viewModel: CuriosityFragmentViewModel) {
+        val popupView = layoutInflater.inflate(R.layout.context_menu, null)
+        val popupWindow = PopupWindow(
+            popupView,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            true
+        )
+
+        val recyclerView = popupView.findViewById<RecyclerView>(R.id.recyclerView)
+        recyclerView.layoutManager = LinearLayoutManager(requireContext())
+        val popAdapter = PopupWindowAdapter(popupWindow,viewModel)
+        recyclerView.adapter = popAdapter
+
+
+        // Set an elevation value if desired
+        popupWindow.elevation = 10f
+
+        val list = viewModel.getCameraList(RoverType.CURIOSITY)
+        if (list.isEmpty()) {
+            list.add("all")
+        } else {
+            list.add(CLEAR_FILTER)
+        }
+        popAdapter.submitList(list)
+        // Show the popup window
+        popupWindow.showAsDropDown(anchorView)
+
+    }
+
+
+    private inner class PopupWindowAdapter(
+        val popupWindow: PopupWindow,
+        val viewModel: CuriosityFragmentViewModel
+    ) :
+        RecyclerView.Adapter<PopupWindowAdapter.ViewHolder>() {
+
+        // Define your data source
+        private val itemList = mutableListOf<String>()
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val itemView = layoutInflater.inflate(R.layout.item_text_view, parent, false)
+            return ViewHolder(itemView)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val item = itemList[position]
+            holder.textView.text = item
+
+            // Set click listener for the item view
+            viewModel.currentFilter.value?.let {
+                holder.textView.setTextColor(
+                    ContextCompat.getColor(
+                        requireContext(),
+                        if (it == item) R.color.dark_red else R.color.white
+                    )
+                )
+            }
+
+            holder.itemView.setOnClickListener {
+                // Handle click on the item
+                if (item == CLEAR_FILTER || item == "all") {
+                    viewModel.clearFilter()
+                } else {
+                    viewModel.updateFilter(item)
+                }
+                popupWindow.dismiss()
+            }
+        }
+
+        override fun getItemCount(): Int {
+            return itemList.size
+        }
+
+        fun submitList(set: HashSet<String>) {
+            val list = set.toMutableList()
+            itemList.addAll(list)
+
+        }
+
+        inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+            val textView: TextView = itemView as TextView
+        }
+    }
+
+
 
     override fun onDestroyView() {
         super.onDestroyView()
@@ -130,51 +200,17 @@ class CuriosityFragment : Fragment(), MenuProvider {
     }
 
     companion object {
-        fun newInstance(): CuriosityFragment {
-            return CuriosityFragment()
-        }
-    }
 
-    override fun onPrepareMenu(menu: Menu) {
-        super.onPrepareMenu(menu)
-        menu.clear()
-        if (cameraList.isNullOrEmpty()) {
-            menu.add("all")
-        } else {
-            for (camera in cameraList!!) {
-                menu.add(camera)
-            }
-            menu.add(CLEAR_FILTER)
-        }
-    }
+        private const val ARG_ROVER_TYPE = "rover_type"
 
-    override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
-        menu.clear()
-        menuInflater.inflate(R.menu.camera_menu, menu)
-    }
-
-    override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
-        val filter = menuItem.title
-        searchMode = true
-        adapter.filterByCamera(filter.toString())
-        if (filter.toString().equals(CLEAR_FILTER)) {
-            getCuriosity()
-        }
-        return true
-    }
-
-    /**
-     * Adds new Mars photos to the firstList if they are not already present.
-     */
-    private fun addNewMarsPhotos(
-        firstList: MutableList<MarsPhoto>,
-        secondList: MutableList<MarsPhoto>
-    ) {
-        for (photo in secondList) {
-            if (!firstList.contains(photo)) {
-                firstList.add(photo)
+        fun newInstance(roverType: RoverType): CuriosityFragment {
+            return CuriosityFragment().apply {
+                arguments = Bundle().apply {
+                    putSerializable(ARG_ROVER_TYPE, roverType)
+                }
             }
         }
     }
+
 
 }

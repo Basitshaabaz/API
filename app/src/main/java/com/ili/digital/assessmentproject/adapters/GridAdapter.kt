@@ -4,6 +4,7 @@ package com.ili.digital.assessmentproject.adapters
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.paging.PagingDataAdapter
 
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -16,9 +17,7 @@ import com.ili.digital.assessmentproject.util.loadUrl
 class GridAdapter(
     private val onClickListener: OnClickListener
 ) :
-    ListAdapter<MarsPhoto, GridAdapter.ViewHolder>(DiffCallback()) {
-
-    private var photoList = mutableListOf<MarsPhoto>()
+    PagingDataAdapter<MarsPhoto, GridAdapter.ViewHolder>(DiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_grid, parent, false)
@@ -26,35 +25,14 @@ class GridAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val item = photoList[position]
-        holder.bind(item)
-        holder.itemView.setOnClickListener {
-            onClickListener.clickListener(item)
+        val item = getItem(position)
+        if(item != null) {
+            holder.bind(item)
+            holder.itemView.setOnClickListener {
+                onClickListener.clickListener(item)
+            }
         }
     }
-
-    override fun getItemCount(): Int {
-        return photoList.size
-    }
-
-    fun updateData(newPhotoList: List<MarsPhoto>) {
-        val previousSize = photoList.size
-        photoList.addAll(newPhotoList)
-        notifyItemRangeInserted(previousSize, newPhotoList.size)
-    }
-
-    /**
-     * For filtering current list according to camera
-     */
-    fun filterByCamera(camera: String) {
-        val filterList = photoList.filter {
-            it.camera.name == camera
-        }.toMutableList()
-        photoList.clear()
-        photoList.addAll(filterList)
-        notifyDataSetChanged()
-    }
-
 
     /**
      * [DiffCallback] used for checking the content same in effective time interval
@@ -82,8 +60,6 @@ class GridAdapter(
             // Bind data to views in the item layout
             binding.ivImage.loadUrl(item.img_src)
             binding.tvId.text = item.id.toString()
-
-
         }
     }
 
@@ -93,5 +69,5 @@ class GridAdapter(
     class OnClickListener(val clickListener: (photoList: MarsPhoto) -> Unit) {
         fun onClick(photo: MarsPhoto) = clickListener(photo)
     }
-
 }
+

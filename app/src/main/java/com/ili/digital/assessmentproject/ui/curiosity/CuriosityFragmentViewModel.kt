@@ -1,84 +1,94 @@
 package com.ili.digital.assessmentproject.ui.curiosity
 
 import android.app.Application
-import com.ili.digital.assessmentproject.data.model.ScreenState
-import com.ili.digital.assessmentproject.data.remote.ApiResult
-import com.ili.digital.assessmentproject.data.respositories.MarsPhotosRepository
-import com.ili.digital.assessmentproject.data.model.MarsPhotosResponse
+import androidx.lifecycle.viewModelScope
+import androidx.paging.ExperimentalPagingApi
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.PagingSource
+import androidx.paging.cachedIn
+import com.ili.digital.assessmentproject.data.datasource.MarsPhotoRemoteMediator
+import com.ili.digital.assessmentproject.data.datasource.roomDB.AppDatabase
+import com.ili.digital.assessmentproject.data.model.MarsPhoto
+import com.ili.digital.assessmentproject.data.model.RoverType
+import com.ili.digital.assessmentproject.data.remote.ApiInterface
 import com.ili.digital.assessmentproject.ui.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.flatMapLatest
 import javax.inject.Inject
 
 
 @HiltViewModel
 class CuriosityFragmentViewModel @Inject constructor(
-    private val apiRepository: MarsPhotosRepository,
+    private val database: AppDatabase,
+    private val apiService: ApiInterface,
     application: Application
 ) : BaseViewModel(application) {
 
-    private val _opportunityState = MutableStateFlow(ScreenState())
-    val opportunityState: StateFlow<ScreenState> = _opportunityState.asStateFlow()
-    private var currentPage = 1
+    companion object {
+        const val PAGE_SIZE = 20
+        const val PREFETCH_DISTANCE = 10
+    }
 
 
-    /**
-     * Fetches the initial Curiosity data from the API.
-     * @param page The page number to fetch (default is 1).
-     */
-    suspend fun getCuriosity(page: Int = 1) {
-        currentPage = page
-        apiRepository.fetchCuriosity(currentPage).collect { result ->
-            when (result) {
-                is ApiResult.Loading -> {
-                    _opportunityState.update {
-                        it.copy(isLoading = true)
-                    }
-                }
-                is ApiResult.Success -> {
-                    val cameraList = extractCameraList(result.data)
-                    _opportunityState.update {
-                        it.copy(
-                            photoList = result.data?.photos ?: emptyList(),
-                            isLoading = false,
-                            cameraList = cameraList
-                        )
-                    }
-                }
-                is ApiResult.Error -> {
-                    _opportunityState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = result.message ?: "Error Occurred"
-                        )
-                    }
-                }
-            }
+    private val _currentFilter = MutableStateFlow<String?>(null)
+    val currentFilter: StateFlow<String?> = _currentFilter.asStateFlow()
+
+    val roverType: MutableStateFlow<RoverType?> = MutableStateFlow(null)
+
+    @OptIn(ExperimentalPagingApi::class)
+    val marsPhotoFlow: Flow<PagingData<MarsPhoto>> = roverType.flatMapLatest { type ->
+        _currentFilter.flatMapLatest { filter ->
+            getPhotosFlow(filter, type)
+        }
+    }.cachedIn(viewModelScope)
+
+    // Returns the flow of Mars photos based on the filter and rover type.
+    @OptIn(ExperimentalPagingApi::class)
+    private fun getPhotosFlow(filter: String?, type: RoverType?): Flow<PagingData<MarsPhoto>> {
+        val config = PagingConfig(pageSize = PAGE_SIZE, enablePlaceholders = false)
+
+        return if (filter == null) {
+            Pager(
+                config = config,
+                remoteMediator = MarsPhotoRemoteMediator(apiService, database, type!!),
+                pagingSourceFactory = { database.marsPhotoDao().getPagingSource(type.typeName) }
+            ).flow
+        } else {
+            Pager(
+                config = config,
+                pagingSourceFactory = { database.marsPhotoDao().getFilterPagingSource(filter) }
+            ).flow
         }
     }
 
-    /**
-     * Loads more Curiosity data by fetching the next page.
-     */
-    suspend fun loadMoreCuriosity() {
-        val nextPage = currentPage + 1
-        getCuriosity(nextPage)
+    // Update the filter for fetching Mars photos.
+    fun updateFilter(newFilter: String?) {
+        _currentFilter.value = newFilter
     }
 
-    /**
-     * Extracts the unique camera names from the MarsPhotosResponse.
-     * @param marsPhotosResponse The response containing Mars photos.
-     * @return The set of unique camera names.
-     */
-    private fun extractCameraList(marsPhotosResponse: MarsPhotosResponse?): HashSet<String> {
-        val cameraList = mutableSetOf<String>()
-        marsPhotosResponse?.photos?.forEach { photo ->
-            cameraList.add(photo.camera.name)
-        }
-        return cameraList.toHashSet()
+    // Clear the filter for fetching Mars photos.
+    fun clearFilter() {
+        _currentFilter.value = null
     }
 
+    // Update the rover type for fetching Mars photos.
+    fun updateRoverType(newType: RoverType?) {
+        roverType.value = newType
+    }
+
+    // Get the list of unique camera names based on rover type.
+    fun getCameraList(rover: RoverType): HashSet<String> {
+        return database.marsPhotoDao().getUniqueCameraNames(rover.typeName).toHashSet()
+    }
+
+    // Get the PagingSource for Mars photos based on rover type name.
+    fun getPagingSource(typeName: String): PagingSource<Int, MarsPhoto> {
+        return database.marsPhotoDao().getPagingSource(typeName)
+    }
 }
