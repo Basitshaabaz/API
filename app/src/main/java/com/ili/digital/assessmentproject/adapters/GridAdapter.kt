@@ -34,6 +34,10 @@ class GridAdapter(
         }
     }
 
+    fun getItemMars(position: Int):MarsPhoto{
+        return  getItem(position)!!
+    }
+
     /**
      * [DiffCallback] used for checking the content same in effective time interval
      */
@@ -54,7 +58,7 @@ class GridAdapter(
      * id unique image id got from API response
      */
     inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        private val binding = ItemGridBinding.bind(view)
+        val binding = ItemGridBinding.bind(view)
 
         fun bind(item: MarsPhoto) {
             // Bind data to views in the item layout

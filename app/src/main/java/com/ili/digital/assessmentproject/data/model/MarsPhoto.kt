@@ -16,10 +16,10 @@ data class MarsPhoto(
     @PrimaryKey
     var id: Int = 0,
     var sol: Int = 0,
-    var camera: MarsCamera,
+    var camera: MarsCamera? = null,
     var camera_name: String? = "",
     var img_src: String = "",
     var earth_date: String = "",
     var rover_name: String? = "",
-    var rover: MarsRover
+    var rover: MarsRover? = null
 )

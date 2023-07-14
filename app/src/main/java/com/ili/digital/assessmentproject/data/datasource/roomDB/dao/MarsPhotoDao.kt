@@ -31,7 +31,7 @@ interface MarsPhotoDao {
     suspend fun insert(contact: MarsPhoto)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(photos: List<MarsPhoto>)
+    suspend fun insertAll(photos: List<MarsPhoto?>)
 
     @Delete
     suspend fun delete(contact: MarsPhoto)

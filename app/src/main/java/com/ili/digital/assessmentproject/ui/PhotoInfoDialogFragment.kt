@@ -31,10 +31,10 @@ class PhotoInfoDialogFragment(
         super.onViewCreated(view, savedInstanceState)
         photo.img_src.let { binding.ivPhoto.loadUrl(it) }
         binding.txtDate.text = "Date: ${photo.earth_date}"
-        binding.txtRoverName.text = "Name: ${photo.rover.name}"
-        binding.txtCamName.text = "Camera: ${photo.camera.name}"
-        binding.txtStatus.text = "Status: ${photo.rover.status}"
-        binding.txtLaunchDate.text = "Launch Date: ${photo.rover.launch_date}"
-        binding.txtLandingDate.text = "Landing Date: ${photo.rover.landing_date}"
+        binding.txtRoverName.text = "Name: ${photo.rover?.name!!}"
+        binding.txtCamName.text = "Camera: ${photo.camera?.name!!}"
+        binding.txtStatus.text = "Status: ${photo.rover?.status!!}"
+        binding.txtLaunchDate.text = "Launch Date: ${photo.rover?.launch_date!!}"
+        binding.txtLandingDate.text = "Landing Date: ${photo.rover?.landing_date!!}"
     }
 }

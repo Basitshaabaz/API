@@ -13,7 +13,7 @@ import com.ili.digital.assessmentproject.data.remote.ApiInterface
 import java.io.IOException
 
 @OptIn(ExperimentalPagingApi::class)
-class MarsPhotoRemoteMediator(
+class MarsPhotoRemoteMediator   (
     private val marsApi: ApiInterface,
     private val database: AppDatabase,
     private val roverType: RoverType
@@ -45,7 +45,7 @@ class MarsPhotoRemoteMediator(
         }
     }
 
-    private suspend fun refreshData(): MediatorResult {
+    suspend fun refreshData(): MediatorResult {
         // Reset page number to initial page on refresh.
         nextPage = INITIAL_PAGE
         return appendData(null)
@@ -65,10 +65,12 @@ class MarsPhotoRemoteMediator(
         val apiResponse = marsApi.getPhotos(roverType.typeName, sol, page = nextPage)
         if (apiResponse.isSuccessful) {
             val photos = apiResponse.body()?.photos?.map { photo ->
-                photo.copy(
-                    camera_name = photo.camera.name,
-                    rover_name = photo.rover.name
-                )
+                photo.camera?.let {
+                    photo.copy(
+                        camera_name = photo.camera?.name!!,
+                        rover_name = photo.rover?.name!!
+                    )
+                }
             }
 
             database.withTransaction {
