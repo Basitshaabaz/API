@@ -27,7 +27,6 @@ In order to make the app work, you need to change the `API_KEY` constant in the 
 The project currently has two areas where work is yet to be done:
 
 - **Unit Tests:** The project does not include unit tests as of yet.
-- **UI Tests:** The project lacks UI tests.
 
 
 
